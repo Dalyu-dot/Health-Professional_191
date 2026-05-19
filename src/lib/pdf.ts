@@ -41,33 +41,29 @@ export async function generateProviderPdf(bundle: RecordBundle) {
 
   const page = pdf.getPage(0);
 
-  // Build a map of checkbox name → {page, rect} for direct drawing
+  // Build position map using pdf-lib's own widget API (same method that works for text fields)
   const checkboxPositions = new Map<string, { pageIndex: number; x: number; y: number; w: number; h: number }>();
-  pdf.getPages().forEach((pg, pageIndex) => {
-    try {
-      const annots = pg.node.Annots();
-      if (!annots) return;
-      for (let i = 0; i < annots.size(); i++) {
-        try {
-          const annot = annots.lookup(i) as any;
-          const ftVal = annot.get(annot.context.obj('FT'));
-          if (!ftVal || ftVal.toString() !== '/Btn') continue;
-          const tVal = annot.get(annot.context.obj('T'));
-          const name = tVal ? tVal.decodeText?.() ?? tVal.toString().replace(/[()]/g, '') : null;
-          if (!name) continue;
-          const rectArr = annot.get(annot.context.obj('Rect'));
-          if (!rectArr) continue;
-          const coords = rectArr.asArray?.() ?? [];
-          if (coords.length < 4) continue;
-          const x1 = coords[0].asNumber?.() ?? 0;
-          const y1 = coords[1].asNumber?.() ?? 0;
-          const x2 = coords[2].asNumber?.() ?? 0;
-          const y2 = coords[3].asNumber?.() ?? 0;
-          checkboxPositions.set(name, { pageIndex, x: x1, y: y1, w: x2 - x1, h: y2 - y1 });
-        } catch { /* skip */ }
-      }
-    } catch { /* skip */ }
-  });
+  try {
+    form.getFields().forEach((field) => {
+      field.acroField.getWidgets().forEach((widget) => {
+        const r = widget.getRectangle();
+        // Find which page this widget is on
+        let pageIndex = 0;
+        pdf.getPages().forEach((pg, idx) => {
+          try {
+            const annots = pg.node.Annots();
+            if (!annots) return;
+            for (let i = 0; i < annots.size(); i++) {
+              if (annots.lookup(i) === widget.dict) { pageIndex = idx; }
+            }
+          } catch { /* skip */ }
+        });
+        checkboxPositions.set(field.getName(), { pageIndex, x: r.x, y: r.y, w: r.width, h: r.height });
+      });
+    });
+  } catch (e) {
+    console.warn('[pdf] position map failed', e);
+  }
 
   const check = (name: string, value: boolean) => {
     try {
@@ -78,21 +74,19 @@ export async function generateProviderPdf(bundle: RecordBundle) {
 
     if (!value) return;
 
-    // Draw checkmark directly at the field's position
     const pos = checkboxPositions.get(name);
     if (pos) {
       const targetPage = pdf.getPage(pos.pageIndex);
-      const size = Math.min(pos.w, pos.h) * 0.9;
+      const size = Math.min(pos.w, pos.h) * 0.75;
       targetPage.drawText('X', {
-        x: pos.x + (pos.w - size * 0.6) / 2,
+        x: pos.x + (pos.w - size * 0.55) / 2,
         y: pos.y + (pos.h - size) / 2,
         size,
         font,
         color: rgb(0, 0, 0),
       });
     } else {
-      // Fallback: log missing position so we can map it
-      console.warn(`[pdf] no position found for checkbox: ${name}`);
+      console.warn(`[pdf] no position for: ${name}`);
     }
   };
 
