@@ -12,19 +12,6 @@ export async function generateProviderPdf(bundle: RecordBundle) {
   const pdf = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const form = pdf.getForm();
-
-  // Debug: log all form fields with their types and positions
-  try {
-    form.getFields().forEach((field) => {
-      const widgets = field.acroField.getWidgets();
-      widgets.forEach((w) => {
-        const r = w.getRectangle();
-        console.log(`[pdf field] type=${field.constructor.name} name="${field.getName()}" x=${r.x.toFixed(1)} y=${r.y.toFixed(1)} w=${r.width.toFixed(1)} h=${r.height.toFixed(1)}`);
-      });
-    });
-  } catch (e) {
-    console.warn('[pdf] field dump failed', e);
-  }
   const { record, trainings, affiliations, profileUpdates } = bundle;
   const data = record.form_data;
   const p = data.personal;
@@ -47,7 +34,6 @@ export async function generateProviderPdf(bundle: RecordBundle) {
     form.getFields().forEach((field) => {
       field.acroField.getWidgets().forEach((widget) => {
         const r = widget.getRectangle();
-        // Find which page this widget is on
         let pageIndex = 0;
         pdf.getPages().forEach((pg, idx) => {
           try {
@@ -142,9 +128,15 @@ export async function generateProviderPdf(bundle: RecordBundle) {
   text('text_90half', p.middleName);
   check('checkbox_93fnoe', p.noMiddleName);
   text('text_82ueee', p.mothersMaidenName);
-  check('checkbox_94qczx', false);
+  text('text_85mqze', p.mothersFirstName);
+  text('text_88thov', '');
+  text('text_91vvso', p.mothersMiddleName);
+  check('checkbox_94qczx', p.noMotherMiddleName);
   text('text_83ysij', p.spouseName);
-  check('checkbox_95zrhd', false);
+  text('text_86dzta', p.spouseFirstName);
+  text('text_89btia', '');
+  text('text_92lyec', p.spouseMiddleName);
+  check('checkbox_95zrhd', p.noSpouseMiddleName);
 
   check('checkbox_60newa', p.sex === 'male');
   check('checkbox_61odiv', p.sex === 'female');
