@@ -35,7 +35,13 @@ export interface ProviderRecordData {
     nameExtension: string;
     noMiddleName: boolean;
     mothersMaidenName: string;
+    mothersFirstName: string;
+    mothersMiddleName: string;
+    noMotherMiddleName: boolean;
     spouseName: string;
+    spouseFirstName: string;
+    spouseMiddleName: string;
+    noSpouseMiddleName: boolean;
     sex: '' | 'male' | 'female';
     civilStatus: string;
     birthdate: string;

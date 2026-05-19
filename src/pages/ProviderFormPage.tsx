@@ -5,7 +5,7 @@ import { CheckboxField, Section, SelectField, TextField } from '../components/fo
 import { PhotoUpload } from '../components/form/PhotoUpload';
 import { SignaturePad } from '../components/form/SignaturePad';
 import { blankAffiliation, blankProfileUpdate, blankResidencyTraining, defaultRecordData, profileUpdateTypes } from '../lib/formDefaults';
-import { createLocalRecord, getLocalRecordBundle, replaceLocalChildren, updateLocalRecord } from '../lib/localRecords';
+import { createRecord, getRecordBundle, replaceChildren, updateRecord } from '../lib/records';
 import { generateProviderPdf } from '../lib/pdf';
 import type { HospitalAffiliation, ProfileUpdateDetail, ProviderRecord, ProviderRecordData, ResidencyTraining } from '../types/database';
 
@@ -22,24 +22,33 @@ export function ProviderFormPage() {
   const [signature, setSignature] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [isError, setIsError] = useState(false);
+
+  const showMessage = (text: string, error = false) => {
+    setMessage(text);
+    setIsError(error);
+  };
 
   useEffect(() => {
     if (!id || id === 'new') return;
-    setBusy(true);
-    try {
-      const bundle = getLocalRecordBundle(id);
-      setRecord(bundle.record);
-      setForm(bundle.record.form_data);
-      setTrainings(bundle.trainings.length ? bundle.trainings : [blankResidencyTraining()]);
-      setAffiliations(bundle.affiliations.length ? bundle.affiliations : [blankAffiliation()]);
-      setUpdates(bundle.profileUpdates.length ? bundle.profileUpdates : profileUpdateTypes.map(blankProfileUpdate));
-      setPhoto(bundle.record.passport_photo_url);
-      setSignature(bundle.record.signature_url);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to load record.');
-    } finally {
-      setBusy(false);
-    }
+    const load = async () => {
+      setBusy(true);
+      try {
+        const bundle = await getRecordBundle(id);
+        setRecord(bundle.record);
+        setForm(bundle.record.form_data);
+        setTrainings(bundle.trainings.length ? bundle.trainings : [blankResidencyTraining()]);
+        setAffiliations(bundle.affiliations.length ? bundle.affiliations : [blankAffiliation()]);
+        setUpdates(bundle.profileUpdates.length ? bundle.profileUpdates : profileUpdateTypes.map(blankProfileUpdate));
+        setPhoto(bundle.record.passport_photo_url);
+        setSignature(bundle.record.signature_url);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Unable to load record.');
+      } finally {
+        setBusy(false);
+      }
+    };
+    load();
   }, [id]);
 
   useEffect(() => {
@@ -80,15 +89,15 @@ export function ProviderFormPage() {
     setBusy(true);
     try {
       let current = record;
-      if (!current) current = createLocalRecord(form);
-      const saved = updateLocalRecord(current.id, form, status, { passport_photo_url: photo, signature_url: signature });
-      replaceLocalChildren(saved.id, trainings, affiliations, updates);
+      if (!current) current = await createRecord(form);
+      const saved = await updateRecord(current.id, form, status, { passport_photo_url: photo, signature_url: signature });
+      await replaceChildren(saved.id, trainings, affiliations, updates);
       setRecord(saved);
-      if (!silent) setMessage(status === 'submitted' ? 'Record marked submitted locally.' : 'Draft saved locally.');
+      if (!silent) showMessage(status === 'submitted' ? 'Record submitted.' : 'Draft saved.');
       if (!id || id === 'new') navigate(`/records/${saved.id}`, { replace: true });
       return saved;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to save record.');
+      showMessage(error instanceof Error ? error.message : 'Unable to save record.', true);
       return null;
     } finally {
       setBusy(false);
@@ -104,9 +113,9 @@ export function ProviderFormPage() {
     if (!validateForm()) return;
     const current = await save('draft', true);
     if (!current) return;
-    const bundle = getLocalRecordBundle(current.id);
+    const bundle = await getRecordBundle(current.id);
     const bytes = await generateProviderPdf({ ...bundle, record: { ...bundle.record, form_data: form, passport_photo_url: photo, signature_url: signature } });
-    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     if (print) {
       const win = window.open(url, '_blank');
@@ -125,7 +134,7 @@ export function ProviderFormPage() {
         <div>
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-phil-700 dark:text-emerald-300"><ArrowLeft size={16} /> Dashboard</Link>
           <h1 className="mt-2 text-xl font-semibold">PhilHealth Provider Data Record</h1>
-          <p className="text-sm text-slate-500">{busy ? 'Saving changes...' : 'Autosaves drafts locally in this browser.'}</p>
+          <p className="text-sm text-slate-500">{busy ? 'Saving...' : 'Draft autosaved.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => save('draft')} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-4 py-2 font-medium dark:border-slate-700"><Save size={18} /> Save</button>
@@ -134,7 +143,7 @@ export function ProviderFormPage() {
           <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-md bg-phil-600 px-4 py-2 font-semibold text-white"><Send size={18} /> Submit</button>
         </div>
       </div>
-      {message && <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
+      {message && <p className={`rounded-md p-3 text-sm ${isError ? 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'}`}>{message}</p>}
 
       <Section title="1. Classification">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -180,21 +189,33 @@ export function ProviderFormPage() {
             <PhotoUpload value={photo} onChange={setPhoto} />
           </div>
           <div className="min-w-0 flex-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Name row */}
+            {/* Row 1: Last - First - Middle */}
             <TextField label="Last Name" required value={form.personal.lastName} onChange={(v) => setNested('personal', 'lastName', v)} />
             <TextField label="First Name" required value={form.personal.firstName} onChange={(v) => setNested('personal', 'firstName', v)} />
             <div className="grid gap-1">
               <TextField label="Middle Name" required={!form.personal.noMiddleName} value={form.personal.middleName} onChange={(v) => setNested('personal', 'middleName', v)} />
               <CheckboxField label="No Middle Name" checked={form.personal.noMiddleName} onChange={(v) => setNested('personal', 'noMiddleName', v)} />
             </div>
+            {/* Row 2: Name Ext - Sex - Civil Status */}
             <TextField label="Name Extension (Jr., Sr., etc.)" value={form.personal.nameExtension} onChange={(v) => setNested('personal', 'nameExtension', v)} />
-            <TextField label="Mother's Maiden Name" required value={form.personal.mothersMaidenName} onChange={(v) => setNested('personal', 'mothersMaidenName', v)} />
-            <TextField label="Spouse Name (if married)" value={form.personal.spouseName} onChange={(v) => setNested('personal', 'spouseName', v)} />
-            {/* Demographics */}
             <SelectField label="Sex" required value={form.personal.sex} onChange={(v) => setNested('personal', 'sex', v as ProviderRecordData['personal']['sex'])} options={[{ label: 'Male', value: 'male' }, { label: 'Female', value: 'female' }]} />
             <TextField label="Civil Status" required value={form.personal.civilStatus} onChange={(v) => setNested('personal', 'civilStatus', v)} />
-            <TextField label="Birthdate" required type="date" value={form.personal.birthdate} onChange={(v) => setNested('personal', 'birthdate', v)} />
+            {/* Row 3: Mother Last - First - Middle */}
+            <TextField label="Mother's Maiden Last Name" required value={form.personal.mothersMaidenName} onChange={(v) => setNested('personal', 'mothersMaidenName', v)} />
+            <TextField label="Mother's First Name" required value={form.personal.mothersFirstName} onChange={(v) => setNested('personal', 'mothersFirstName', v)} />
+            <div className="grid gap-1">
+              <TextField label="Mother's Middle Name" required={!form.personal.noMotherMiddleName} value={form.personal.mothersMiddleName} onChange={(v) => setNested('personal', 'mothersMiddleName', v)} />
+              <CheckboxField label="No Middle Name" checked={form.personal.noMotherMiddleName} onChange={(v) => setNested('personal', 'noMotherMiddleName', v)} />
+            </div>
+            {/* Row 4: Spouse Last - First - Middle */}
+            <TextField label="Spouse Last Name (if married)" value={form.personal.spouseName} onChange={(v) => setNested('personal', 'spouseName', v)} />
+            <TextField label="Spouse First Name" value={form.personal.spouseFirstName} onChange={(v) => setNested('personal', 'spouseFirstName', v)} />
+            <div className="grid gap-1">
+              <TextField label="Spouse Middle Name" value={form.personal.spouseMiddleName} onChange={(v) => setNested('personal', 'spouseMiddleName', v)} />
+              <CheckboxField label="No Middle Name" checked={form.personal.noSpouseMiddleName} onChange={(v) => setNested('personal', 'noSpouseMiddleName', v)} />
+            </div>
             {/* Contact */}
+            <TextField label="Birthdate" required type="date" value={form.personal.birthdate} onChange={(v) => setNested('personal', 'birthdate', v)} />
             <TextField label="Email Address" required type="email" value={form.personal.email} onChange={(v) => setNested('personal', 'email', v)} />
             <TextField label="Landline Number" value={form.personal.landline} onChange={(v) => setNested('personal', 'landline', v)} />
             <TextField label="Mobile Number" required value={form.personal.mobile} onChange={(v) => setNested('personal', 'mobile', v)} />

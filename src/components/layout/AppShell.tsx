@@ -1,13 +1,20 @@
 import { LogOut, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [dark, setDark] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-ink transition-colors dark:bg-slate-950 dark:text-slate-100">
@@ -15,7 +22,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="min-w-0">
             <p className="text-sm font-semibold text-phil-700 dark:text-emerald-300">PhilHealth Provider Data Record</p>
-            <p className="truncate text-xs text-slate-500">Frontend-only mode · backend ready for later</p>
           </Link>
           <div className="flex items-center gap-2">
             <button
@@ -29,10 +35,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <button
               type="button"
-              disabled
-              className="grid h-10 w-10 place-items-center rounded-md bg-slate-200 text-slate-400 dark:bg-slate-800"
-              aria-label="Backend disabled"
-              title="Backend disabled for now"
+              onClick={handleLogout}
+              className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:border-red-300 hover:text-red-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-red-700 dark:hover:text-red-400"
+              aria-label="Log out"
+              title="Log out"
             >
               <LogOut size={18} />
             </button>

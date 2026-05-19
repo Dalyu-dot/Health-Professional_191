@@ -1,4 +1,4 @@
-import { PDFDocument, PDFImage, StandardFonts } from 'pdf-lib';
+import { PDFDocument, PDFImage, StandardFonts, rgb } from 'pdf-lib';
 import type { RecordBundle } from '../types/database';
 
 const TEMPLATE_PATH = '/philhealth-pdr-template.pdf';
@@ -12,6 +12,19 @@ export async function generateProviderPdf(bundle: RecordBundle) {
   const pdf = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const form = pdf.getForm();
+
+  // Debug: log all form fields with their types and positions
+  try {
+    form.getFields().forEach((field) => {
+      const widgets = field.acroField.getWidgets();
+      widgets.forEach((w) => {
+        const r = w.getRectangle();
+        console.log(`[pdf field] type=${field.constructor.name} name="${field.getName()}" x=${r.x.toFixed(1)} y=${r.y.toFixed(1)} w=${r.width.toFixed(1)} h=${r.height.toFixed(1)}`);
+      });
+    });
+  } catch (e) {
+    console.warn('[pdf] field dump failed', e);
+  }
   const { record, trainings, affiliations, profileUpdates } = bundle;
   const data = record.form_data;
   const p = data.personal;
@@ -26,13 +39,60 @@ export async function generateProviderPdf(bundle: RecordBundle) {
     }
   };
 
+  const page = pdf.getPage(0);
+
+  // Build a map of checkbox name → {page, rect} for direct drawing
+  const checkboxPositions = new Map<string, { pageIndex: number; x: number; y: number; w: number; h: number }>();
+  pdf.getPages().forEach((pg, pageIndex) => {
+    try {
+      const annots = pg.node.Annots();
+      if (!annots) return;
+      for (let i = 0; i < annots.size(); i++) {
+        try {
+          const annot = annots.lookup(i) as any;
+          const ftVal = annot.get(annot.context.obj('FT'));
+          if (!ftVal || ftVal.toString() !== '/Btn') continue;
+          const tVal = annot.get(annot.context.obj('T'));
+          const name = tVal ? tVal.decodeText?.() ?? tVal.toString().replace(/[()]/g, '') : null;
+          if (!name) continue;
+          const rectArr = annot.get(annot.context.obj('Rect'));
+          if (!rectArr) continue;
+          const coords = rectArr.asArray?.() ?? [];
+          if (coords.length < 4) continue;
+          const x1 = coords[0].asNumber?.() ?? 0;
+          const y1 = coords[1].asNumber?.() ?? 0;
+          const x2 = coords[2].asNumber?.() ?? 0;
+          const y2 = coords[3].asNumber?.() ?? 0;
+          checkboxPositions.set(name, { pageIndex, x: x1, y: y1, w: x2 - x1, h: y2 - y1 });
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  });
+
   const check = (name: string, value: boolean) => {
     try {
       const field = form.getCheckBox(name);
       if (value) field.check();
       else field.uncheck();
-    } catch {
-      // Missing template fields should not block the rest of the export.
+    } catch { /* skip */ }
+
+    if (!value) return;
+
+    // Draw checkmark directly at the field's position
+    const pos = checkboxPositions.get(name);
+    if (pos) {
+      const targetPage = pdf.getPage(pos.pageIndex);
+      const size = Math.min(pos.w, pos.h) * 0.9;
+      targetPage.drawText('X', {
+        x: pos.x + (pos.w - size * 0.6) / 2,
+        y: pos.y + (pos.h - size) / 2,
+        size,
+        font,
+        color: rgb(0, 0, 0),
+      });
+    } else {
+      // Fallback: log missing position so we can map it
+      console.warn(`[pdf] no position found for checkbox: ${name}`);
     }
   };
 

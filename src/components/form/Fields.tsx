@@ -80,9 +80,14 @@ export function SelectField({
 
 export function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex min-h-11 items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+    <label className={clsx(
+      'flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm transition',
+      checked
+        ? 'border-phil-600 bg-phil-50 text-phil-900 dark:border-phil-600 dark:bg-phil-900/20 dark:text-phil-100'
+        : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+    )}>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-phil-600" />
-      <span>{label}</span>
+      <span className={clsx('font-medium', checked && 'text-phil-800 dark:text-phil-200')}>{label}</span>
     </label>
   );
 }

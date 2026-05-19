@@ -2,7 +2,7 @@ import { Download, Edit, FilePlus2, Printer, Search, Trash2 } from 'lucide-react
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { defaultRecordData } from '../lib/formDefaults';
-import { createLocalRecord, deleteLocalRecord, getLocalRecordBundle, listLocalRecords } from '../lib/localRecords';
+import { createRecord, deleteRecord, getRecordBundle, listRecords } from '../lib/records';
 import { generateProviderPdf } from '../lib/pdf';
 import type { ProviderRecord } from '../types/database';
 
@@ -18,7 +18,7 @@ export function Dashboard() {
   const load = async () => {
     setBusy(true);
     try {
-      setRecords(listLocalRecords(search));
+      setRecords(await listRecords(search));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to load records.');
     } finally {
@@ -32,11 +32,13 @@ export function Dashboard() {
 
   const createNew = async () => {
     setBusy(true);
+    setMessage('');
     try {
-      const record = createLocalRecord(defaultRecordData);
+      const record = await createRecord(defaultRecordData);
       navigate(`/records/${record.id}`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to create record.');
+      const msg = error instanceof Error ? error.message : String(error);
+      setMessage(`Unable to create record: ${msg}`);
     } finally {
       setBusy(false);
     }
@@ -44,9 +46,9 @@ export function Dashboard() {
 
   const exportPdf = async (record: ProviderRecord, print = false) => {
     try {
-      const bundle = getLocalRecordBundle(record.id);
+      const bundle = await getRecordBundle(record.id);
       const bytes = await generateProviderPdf(bundle);
-      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       if (print) {
         const win = window.open(url, '_blank');
@@ -67,7 +69,7 @@ export function Dashboard() {
       <section className="grid gap-3 sm:grid-cols-3">
         <Stat label="Total records" value={records.length} />
         <Stat label="Submitted" value={submitted} />
-        <Stat label="Storage" value="Local" />
+        <Stat label="Storage" value="Supabase" />
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -116,7 +118,7 @@ export function Dashboard() {
                         <Link to={`/records/${record.id}`} className="grid h-9 w-9 place-items-center rounded-md border border-slate-300" title="Edit"><Edit size={16} /></Link>
                         <button onClick={() => exportPdf(record)} className="grid h-9 w-9 place-items-center rounded-md border border-slate-300" title="Export PDF"><Download size={16} /></button>
                         <button onClick={() => exportPdf(record, true)} className="grid h-9 w-9 place-items-center rounded-md border border-slate-300" title="Print"><Printer size={16} /></button>
-                        <button onClick={() => { deleteLocalRecord(record.id); load(); }} className="grid h-9 w-9 place-items-center rounded-md border border-red-200 text-red-600" title="Delete"><Trash2 size={16} /></button>
+                        <button onClick={() => { deleteRecord(record.id).then(load); }} className="grid h-9 w-9 place-items-center rounded-md border border-red-200 text-red-600" title="Delete"><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>
