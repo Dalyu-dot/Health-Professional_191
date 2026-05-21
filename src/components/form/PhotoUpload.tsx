@@ -29,11 +29,11 @@ export function PhotoUpload({ value, onChange }: { value: string | null; onChang
 
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => inputRef.current?.click()}
-          className="inline-flex items-center gap-2 rounded-md bg-phil-600 px-3 py-2 text-sm font-medium text-white">
+          className="inline-flex min-h-11 items-center gap-2 rounded-md bg-phil-600 px-3 py-2 text-sm font-medium text-white">
           <Upload size={16} /> Upload
         </button>
         <button type="button" onClick={() => setCameraOpen(true)}
-          className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200">
+          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200">
           <Camera size={16} /> Camera
         </button>
       </div>
@@ -109,12 +109,12 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl dark:bg-slate-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 sm:p-4">
+      <div className="max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-xl dark:bg-slate-900">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
           <span className="font-medium">Take Passport Photo</span>
-          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
+          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
             <X size={18} />
           </button>
         </div>
@@ -131,11 +131,11 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={retake}
-                  className="flex-1 rounded-md border border-slate-300 py-2 text-sm font-medium dark:border-slate-700">
+                  className="min-h-11 flex-1 rounded-md border border-slate-300 py-2 text-sm font-medium dark:border-slate-700">
                   Retake
                 </button>
                 <button type="button" onClick={confirm}
-                  className="flex-1 rounded-md bg-phil-600 py-2 text-sm font-semibold text-white">
+                  className="min-h-11 flex-1 rounded-md bg-phil-600 py-2 text-sm font-semibold text-white">
                   Use Photo
                 </button>
               </div>
@@ -162,7 +162,7 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
                 )}
               </div>
               <button type="button" onClick={capture} disabled={!ready}
-                className="w-full rounded-md bg-phil-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+                className="min-h-11 w-full rounded-md bg-phil-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
                 Capture
               </button>
             </div>

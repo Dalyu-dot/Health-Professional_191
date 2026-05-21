@@ -1,7 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type AppRole = 'admin' | 'provider';
-export type RecordStatus = 'draft' | 'submitted' | 'archived';
+export type RecordStatus = 'draft' | 'submitted' | 'archived' | 'approved' | 'declined';
 
 export interface ProviderRecordData {
   classification: {

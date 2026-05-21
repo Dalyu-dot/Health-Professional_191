@@ -56,6 +56,7 @@ export async function listRecords(search = ''): Promise<ProviderRecord[]> {
   let query = supabase
     .from('provider_records')
     .select('*')
+    .eq('user_id', await currentUserId())
     .order('updated_at', { ascending: false });
 
   if (search.trim()) {
@@ -118,6 +119,20 @@ export async function updateRecord(
       status,
       passport_photo_url: photoUrl,
       signature_url: signatureUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ProviderRecord;
+}
+
+export async function updateRecordStatus(id: string, status: RecordStatus): Promise<ProviderRecord> {
+  const { data, error } = await supabase
+    .from('provider_records')
+    .update({
+      status,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)

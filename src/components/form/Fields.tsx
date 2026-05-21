@@ -28,7 +28,7 @@ export function TextField({
   title?: string;
 }) {
   return (
-    <label className={clsx('block text-sm font-medium text-slate-700 dark:text-slate-200', className)}>
+    <label className={clsx('block min-w-0 text-sm font-medium text-slate-700 dark:text-slate-200', className)}>
       {label} {required && <span className="text-red-600">*</span>}
       <input
         type={type}
@@ -41,7 +41,7 @@ export function TextField({
         inputMode={inputMode}
         title={title}
         placeholder={placeholder}
-        className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-slate-950 outline-none transition focus:border-phil-600 focus:ring-2 focus:ring-phil-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        className="mt-1 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-slate-950 outline-none transition focus:border-phil-600 focus:ring-2 focus:ring-phil-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
       />
     </label>
   );
@@ -61,13 +61,13 @@ export function SelectField({
   required?: boolean;
 }) {
   return (
-    <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+    <label className="block min-w-0 text-sm font-medium text-slate-700 dark:text-slate-200">
       {label} {required && <span className="text-red-600">*</span>}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         required={required}
-        className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-slate-950 outline-none transition focus:border-phil-600 focus:ring-2 focus:ring-phil-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        className="mt-1 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-slate-950 outline-none transition focus:border-phil-600 focus:ring-2 focus:ring-phil-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
       >
         <option value="">Select</option>
         {options.map((option) => (
@@ -87,7 +87,7 @@ export function CheckboxField({ label, checked, onChange }: { label: string; che
         : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
     )}>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-phil-600" />
-      <span className={clsx('font-medium', checked && 'text-phil-800 dark:text-phil-200')}>{label}</span>
+      <span className={clsx('min-w-0 break-words font-medium', checked && 'text-phil-800 dark:text-phil-200')}>{label}</span>
     </label>
   );
 }

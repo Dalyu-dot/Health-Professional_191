@@ -4,6 +4,7 @@ import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './pages/Dashboard';
 import { LoginPage } from './pages/LoginPage';
 import { ProviderFormPage } from './pages/ProviderFormPage';
+import { AdminModeProvider, useAdminMode } from './lib/adminMode';
 import { supabase } from './lib/supabase';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -26,14 +27,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <AppShell>{children}</AppShell>;
 }
 
+function NewRecordRoute() {
+  const { isAdminMode } = useAdminMode();
+  if (isAdminMode) return <Navigate to="/" replace />;
+  return <ProviderFormPage />;
+}
+
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/records/new" element={<ProtectedRoute><ProviderFormPage /></ProtectedRoute>} />
-      <Route path="/records/:id" element={<ProtectedRoute><ProviderFormPage /></ProtectedRoute>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <AdminModeProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/records/new" element={<ProtectedRoute><NewRecordRoute /></ProtectedRoute>} />
+        <Route path="/records/:id" element={<ProtectedRoute><ProviderFormPage /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AdminModeProvider>
   );
 }

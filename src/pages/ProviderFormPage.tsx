@@ -1,17 +1,20 @@
 import { ArrowLeft, Download, Plus, Printer, Save, Send, Trash2 } from 'lucide-react';
 import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CheckboxField, Section, SelectField, TextField } from '../components/form/Fields';
 import { PhotoUpload } from '../components/form/PhotoUpload';
 import { SignaturePad } from '../components/form/SignaturePad';
+import { useAdminMode } from '../lib/adminMode';
 import { blankAffiliation, blankProfileUpdate, blankResidencyTraining, defaultRecordData, profileUpdateTypes } from '../lib/formDefaults';
 import { createRecord, getRecordBundle, replaceChildren, updateRecord } from '../lib/records';
 import { generateProviderPdf } from '../lib/pdf';
-import type { HospitalAffiliation, ProfileUpdateDetail, ProviderRecord, ProviderRecordData, ResidencyTraining } from '../types/database';
+import type { HospitalAffiliation, ProfileUpdateDetail, ProviderRecord, ProviderRecordData, RecordStatus, ResidencyTraining } from '../types/database';
 
 export function ProviderFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { isAdminMode } = useAdminMode();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [record, setRecord] = useState<ProviderRecord | null>(null);
   const [form, setForm] = useState<ProviderRecordData>(defaultRecordData);
@@ -23,6 +26,9 @@ export function ProviderFormPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
+  const isViewMode = searchParams.get('mode') === 'view';
+  const isLockedRecord = record?.status === 'submitted' || record?.status === 'approved' || record?.status === 'declined';
+  const isReadOnly = isViewMode || isAdminMode || Boolean(isLockedRecord);
 
   const showMessage = (text: string, error = false) => {
     setMessage(text);
@@ -52,10 +58,10 @@ export function ProviderFormPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!record) return;
+    if (!record || isReadOnly) return;
     const timer = window.setTimeout(() => save('draft', true), 1200);
     return () => window.clearTimeout(timer);
-  }, [form, trainings, affiliations, updates]);
+  }, [form, trainings, affiliations, updates, isReadOnly]);
 
   const setNested = <K extends keyof Omit<ProviderRecordData, 'applicationType'>, F extends keyof ProviderRecordData[K]>(section: K, field: F, value: ProviderRecordData[K][F]) => {
     setForm((current) => ({ ...current, [section]: { ...(current[section] as object), [field]: value } }) as ProviderRecordData);
@@ -74,6 +80,7 @@ export function ProviderFormPage() {
 
   const digitsOnly = (value: string, maxLength: number) => value.replace(/\D/g, '').slice(0, maxLength);
   const isInitialApplication = form.applicationType === 'initial';
+  const showProfileUpdate = form.applicationType === 'renewal';
   const accreditationRequired = !isInitialApplication;
 
   const validateForm = () => {
@@ -85,12 +92,17 @@ export function ProviderFormPage() {
   };
 
   const save = async (status: 'draft' | 'submitted' = 'draft', silent = false) => {
+    if (isReadOnly) return record;
     if (!silent && !validateForm()) return null;
     setBusy(true);
     try {
       let current = record;
       if (!current) current = await createRecord(form);
-      const saved = await updateRecord(current.id, form, status, { passport_photo_url: photo, signature_url: signature });
+      const nextStatus: RecordStatus =
+        status === 'draft' && (current.status === 'approved' || current.status === 'declined')
+          ? current.status
+          : status;
+      const saved = await updateRecord(current.id, form, nextStatus, { passport_photo_url: photo, signature_url: signature });
       await replaceChildren(saved.id, trainings, affiliations, updates);
       setRecord(saved);
       if (!silent) showMessage(status === 'submitted' ? 'Record submitted.' : 'Draft saved.');
@@ -106,15 +118,19 @@ export function ProviderFormPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (isReadOnly) return;
     await save('submitted');
   };
 
   const exportPdf = async (print = false) => {
-    if (!validateForm()) return;
-    const current = await save('draft', true);
+    if (!isReadOnly && !validateForm()) return;
+    const current = isReadOnly ? record : await save('draft', true);
     if (!current) return;
     const bundle = await getRecordBundle(current.id);
-    const bytes = await generateProviderPdf({ ...bundle, record: { ...bundle.record, form_data: form, passport_photo_url: photo, signature_url: signature } });
+    const recordForPdf = isReadOnly
+      ? bundle.record
+      : { ...bundle.record, form_data: form, passport_photo_url: photo, signature_url: signature };
+    const bytes = await generateProviderPdf({ ...bundle, record: recordForPdf });
     const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     if (print) {
@@ -134,17 +150,22 @@ export function ProviderFormPage() {
         <div>
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-phil-700 dark:text-emerald-300"><ArrowLeft size={16} /> Dashboard</Link>
           <h1 className="mt-2 text-xl font-semibold">PhilHealth Provider Data Record</h1>
-          <p className="text-sm text-slate-500">{busy ? 'Saving...' : 'Draft autosaved.'}</p>
+          <p className="text-sm text-slate-500">{isReadOnly ? 'Read-only view.' : busy ? 'Saving...' : 'Draft autosaved.'}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => save('draft')} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-4 py-2 font-medium dark:border-slate-700"><Save size={18} /> Save</button>
-          <button type="button" onClick={() => exportPdf()} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-4 py-2 font-medium dark:border-slate-700"><Download size={18} /> PDF</button>
-          <button type="button" onClick={() => exportPdf(true)} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-4 py-2 font-medium dark:border-slate-700"><Printer size={18} /> Print</button>
-          <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-md bg-phil-600 px-4 py-2 font-semibold text-white"><Send size={18} /> Submit</button>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <button type="button" onClick={() => exportPdf(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 py-2 font-medium dark:border-slate-700"><Printer size={18} /> Print</button>
+          {!isReadOnly && (
+            <>
+              <button type="button" onClick={() => save('draft')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 py-2 font-medium dark:border-slate-700"><Save size={18} /> Save</button>
+              <button type="button" onClick={() => exportPdf()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 py-2 font-medium dark:border-slate-700"><Download size={18} /> PDF</button>
+              <button type="submit" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-phil-600 px-4 py-2 font-semibold text-white"><Send size={18} /> Submit</button>
+            </>
+          )}
         </div>
       </div>
       {message && <p className={`rounded-md p-3 text-sm ${isError ? 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'}`}>{message}</p>}
 
+      <fieldset disabled={isReadOnly} className="space-y-5">
       <Section title="1. Classification">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <CheckboxField label="General Practitioner (GP)" checked={form.classification.generalPractitioner} onChange={(v) => setNested('classification', 'generalPractitioner', v)} />
@@ -171,16 +192,18 @@ export function ProviderFormPage() {
         <SelectField label="Application type" required value={form.applicationType} onChange={(v) => setForm((f) => ({ ...f, applicationType: v as ProviderRecordData['applicationType'], personal: { ...f.personal, accreditationNumber: v === 'initial' ? '' : f.personal.accreditationNumber } }))} options={[{ label: 'Initial', value: 'initial' }, { label: 'Renewal', value: 'renewal' }, { label: 'Re-accreditation', value: 'reaccreditation' }]} />
       </Section>
 
-      <Section title="3. Profile Update">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <CheckboxField label="Update of civil status" checked={form.profileUpdate.civilStatus} onChange={(v) => setNested('profileUpdate', 'civilStatus', v)} />
-          <CheckboxField label="Update of name" checked={form.profileUpdate.name} onChange={(v) => setNested('profileUpdate', 'name', v)} />
-          <CheckboxField label="Update of health facility affiliations" checked={form.profileUpdate.affiliations} onChange={(v) => setNested('profileUpdate', 'affiliations', v)} />
-          <CheckboxField label="Update of Family Planning Training" checked={form.profileUpdate.familyPlanningTraining} onChange={(v) => setNested('profileUpdate', 'familyPlanningTraining', v)} />
-          <CheckboxField label="Others" checked={form.profileUpdate.others} onChange={(v) => setNested('profileUpdate', 'others', v)} />
-        </div>
-        {form.profileUpdate.others && <TextField className="mt-4" label="Others, specify" required value={form.profileUpdate.othersText} onChange={(v) => setNested('profileUpdate', 'othersText', v)} />}
-      </Section>
+      {showProfileUpdate && (
+        <Section title="3. Profile Update">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <CheckboxField label="Update of civil status" checked={form.profileUpdate.civilStatus} onChange={(v) => setNested('profileUpdate', 'civilStatus', v)} />
+            <CheckboxField label="Update of name" checked={form.profileUpdate.name} onChange={(v) => setNested('profileUpdate', 'name', v)} />
+            <CheckboxField label="Update of health facility affiliations" checked={form.profileUpdate.affiliations} onChange={(v) => setNested('profileUpdate', 'affiliations', v)} />
+            <CheckboxField label="Update of Family Planning Training" checked={form.profileUpdate.familyPlanningTraining} onChange={(v) => setNested('profileUpdate', 'familyPlanningTraining', v)} />
+            <CheckboxField label="Others" checked={form.profileUpdate.others} onChange={(v) => setNested('profileUpdate', 'others', v)} />
+          </div>
+          {form.profileUpdate.others && <TextField className="mt-4" label="Others, specify" required value={form.profileUpdate.othersText} onChange={(v) => setNested('profileUpdate', 'othersText', v)} />}
+        </Section>
+      )}
 
       <Section title="4. Personal Information">
         {/* Photo sits at top-right on large screens, stacks above fields on mobile */}
@@ -232,7 +255,9 @@ export function ProviderFormPage() {
             {/* Accreditation */}
             <div className="sm:col-span-2 lg:col-span-3 rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2 bg-slate-50 dark:bg-slate-800/40">
               <CheckboxField label="Initial application / accreditation number not applicable" checked={isInitialApplication} onChange={(checked) => setForm((f) => ({ ...f, applicationType: checked ? 'initial' : '', personal: { ...f.personal, accreditationNumber: checked ? '' : f.personal.accreditationNumber } }))} />
-              <TextField label="PhilHealth Accreditation Number" required={accreditationRequired} value={form.personal.accreditationNumber} onChange={(v) => setNested('personal', 'accreditationNumber', v)} />
+              {!isInitialApplication && (
+                <TextField label="PhilHealth Accreditation Number" required={accreditationRequired} value={form.personal.accreditationNumber} onChange={(v) => setNested('personal', 'accreditationNumber', v)} />
+              )}
             </div>
           </div>
         </div>
@@ -250,14 +275,15 @@ export function ProviderFormPage() {
 
       <DynamicRows title="6. Residency Training" rows={trainings} setRows={setTrainings} blank={blankResidencyTraining} required fields={[['health_facility_name', 'Health Facility Name'], ['address', 'Address'], ['year_started', 'Year Started'], ['year_ended', 'Year Ended']]} />
       <DynamicRows title="7. Hospital/Clinic Affiliations" rows={affiliations} setRows={setAffiliations} blank={blankAffiliation} required fields={[['hospital_clinic_name', 'Hospital/Clinic/Retailer Name'], ['address', 'Address']]} />
-      <ProfileUpdateDetails rows={updates} setRows={setUpdates} />
+      {showProfileUpdate && <ProfileUpdateDetails rows={updates} setRows={setUpdates} />}
 
       <Section title="9. Declaration & Signature">
         <div className="grid gap-4 lg:grid-cols-2">
-          <SignaturePad value={signature} onChange={setSignature} />
+          <SignaturePad value={signature} onChange={setSignature} disabled={isReadOnly} />
           <TextField label="Date" type="date" required value={form.declaration.signedDate} onChange={(v) => setNested('declaration', 'signedDate', v)} />
         </div>
       </Section>
+      </fieldset>
     </form>
   );
 }
@@ -287,13 +313,13 @@ function DynamicRows<T extends object>({
                 <TextField key={String(field)} label={label} required={required} value={String(row[field] ?? '')} onChange={(value) => setRows(rows.map((item, i) => (i === index ? { ...item, [field]: value } : item)))} />
               ))}
             </div>
-            <button type="button" onClick={() => setRows(rows.filter((_row, i) => i !== index))} className="grid h-10 w-10 place-items-center rounded-md border border-red-200 text-red-600" title="Remove row">
+            <button type="button" onClick={() => setRows(rows.filter((_row, i) => i !== index))} className="grid h-11 w-11 place-items-center rounded-md border border-red-200 text-red-600" title="Remove row">
               <Trash2 size={16} />
             </button>
           </div>
         ))}
       </div>
-      <button type="button" onClick={() => setRows([...rows, blank()])} className="mt-3 inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium dark:border-slate-700">
+      <button type="button" onClick={() => setRows([...rows, blank()])} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium dark:border-slate-700">
         <Plus size={16} /> Add row
       </button>
     </Section>

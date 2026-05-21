@@ -1,7 +1,15 @@
 import { Eraser, Save } from 'lucide-react';
 import { PointerEvent, useEffect, useRef, useState } from 'react';
 
-export function SignaturePad({ value, onChange }: { value: string | null; onChange: (dataUrl: string | null) => void }) {
+export function SignaturePad({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string | null;
+  onChange: (dataUrl: string | null) => void;
+  disabled?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [drawing, setDrawing] = useState(false);
 
@@ -36,6 +44,7 @@ export function SignaturePad({ value, onChange }: { value: string | null; onChan
   };
 
   const start = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (disabled) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const ctx = event.currentTarget.getContext('2d');
     const p = point(event);
@@ -45,7 +54,7 @@ export function SignaturePad({ value, onChange }: { value: string | null; onChan
   };
 
   const move = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing) return;
+    if (disabled || !drawing) return;
     const ctx = event.currentTarget.getContext('2d');
     const p = point(event);
     ctx?.lineTo(p.x, p.y);
@@ -53,12 +62,14 @@ export function SignaturePad({ value, onChange }: { value: string | null; onChan
   };
 
   const save = () => {
+    if (disabled) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     onChange(canvas.toDataURL('image/png'));
   };
 
   const clear = () => {
+    if (disabled) return;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -69,17 +80,18 @@ export function SignaturePad({ value, onChange }: { value: string | null; onChan
     <div className="space-y-3">
       <canvas
         ref={canvasRef}
-        className="h-40 w-full touch-none rounded-md border border-slate-300 bg-white dark:border-slate-700"
+        className="h-40 w-full touch-none rounded-md border border-slate-300 bg-white disabled:cursor-not-allowed disabled:bg-slate-50 dark:border-slate-700"
         onPointerDown={start}
         onPointerMove={move}
         onPointerUp={() => setDrawing(false)}
         onPointerCancel={() => setDrawing(false)}
+        aria-disabled={disabled}
       />
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={save} className="inline-flex items-center gap-2 rounded-md bg-phil-600 px-3 py-2 text-sm font-medium text-white">
+        <button type="button" onClick={save} disabled={disabled} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-phil-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60">
           <Save size={16} /> Save signature
         </button>
-        <button type="button" onClick={clear} className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200">
+        <button type="button" onClick={clear} disabled={disabled} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200">
           <Eraser size={16} /> Clear
         </button>
       </div>
